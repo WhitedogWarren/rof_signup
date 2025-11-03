@@ -16,6 +16,7 @@
     "node-pdftk": "^2.1.3",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
-    "pdfjs-dist": "^5.4.296"
+    "pdfjs-dist": "^5.4.296",
+    "xlsx": "^0.18.5"
   }
 }

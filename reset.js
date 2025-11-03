@@ -51,11 +51,11 @@ async function reset() {
     }
 
     // 3. Supprimer tous les fichiers .json de ./converted
-    console.log('\n🗑️  Suppression des fichiers JSON...');
+    console.log('\n🗑️  Suppression des fichiers JSON et txt...');
     try {
       const convertedFiles = await fs.readdir(convertedDir);
       for (const file of convertedFiles) {
-        if (file.endsWith('.json')) {
+        if (file.endsWith('.json') || file.endsWith('.txt')) {
           const filePath = path.join(convertedDir, file);
           await fs.unlink(filePath);
           console.log(`  ✅ ${file} supprimé`);
