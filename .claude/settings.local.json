@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(node rof-signup.js:*)"
-    ],
-    "deny": [],
-    "ask": []
-  }
-}

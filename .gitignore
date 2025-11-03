@@ -3,4 +3,4 @@ package-lock.json
 misc
 *.pdf
 *.code-workspace
-.claude
+.claude/settings.local.json
