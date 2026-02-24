@@ -1,10 +1,11 @@
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import XLSX from 'xlsx';
 
 const __dirname = "./";
 const outDir = path.resolve(__dirname, 'converted');
+const errorDir = path.resolve(__dirname, 'errored');
 const conversionErrors = [];
 
 // Désactiver les warnings de pdfjs
@@ -22,10 +23,10 @@ async function getFileNames() {
 }
 
 async function extractFormFields(fileName) {
+
+  console.log(`Traitement du fichier ${fileName}...`);
   
   const pdfPath = path.resolve(__dirname, fileName);
-  
-
   let pdfBytes;
 
   try {
@@ -72,6 +73,7 @@ async function extractFormFields(fileName) {
       result[fieldName] = value ?? "";
     })
 
+    normalizeData(result);
     checkData(result, fileName);
 
     //* Si pas d'erreur levée par checkData
@@ -82,21 +84,21 @@ async function extractFormFields(fileName) {
     // Essayer de déplacer le fichier avec gestion d'erreur
     try {
       await fs.rename(pdfPath, path.join(outDir, fileName));
-      console.log(`📁 déplacé dans ./converted/\n`);
+      console.log(`  📁 déplacé dans ./converted/\n`);
     } catch (renameErr) {
-      console.log(`🚨 Impossible de déplacer automatiquement (fichier verrouillé)\n`);
+      console.log(`  🚨 Impossible de déplacer automatiquement (fichier verrouillé)\n`);
     }
     return result;
     
   } catch (err) {
-    console.error('🚨 Erreur lors de l\'extraction avec pdf-lib !\n=> ', err.message);
+    console.error('  🚨 Erreur lors de l\'extraction!\n  => ', err.message);
 
     // Libérer la mémoire et attendre avant de déplacer
     pdfBytes = null;
     await new Promise(resolve => setTimeout(resolve, 500));
     try {
       await fs.rename(pdfPath, path.join('./errored', fileName));
-      console.log(`📁 Fichier déplacé dans ./errored/\n`);
+      console.log(`  📁 Fichier déplacé dans ./errored/\n`);
     } catch (renameErr) {
       console.log(`🚨 Impossible de déplacer automatiquement (fichier verrouillé)\n`);
     }
@@ -104,8 +106,81 @@ async function extractFormFields(fileName) {
   }
 }
 
+// Capitalize la première lettre de chaque partie séparée par un espace ou un tiret
+function capitalizeName(str) {
+  return str
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/\s*'\s*/g, "'")
+    .split(/(?=[-\s])/)
+    .map(part => {
+      const sep = part.match(/^[-\s]/) ? part[0] : '';
+      const word = sep ? part.slice(1) : part;
+      return sep + word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join('');
+}
+
+function normalizeData(data) {
+  // Noms : MAJUSCULES, espaces et tirets normalisés
+  for (const field of ['Nom', 'Nom_Mère', 'Nom_Père']) {
+    if (data[field]) {
+      data[field] = data[field]
+        .trim()
+        .replace(/\s+/g, ' ')
+        .replace(/\s*-\s*/g, '-')
+        .replace(/\s*'\s*/g, "'")
+        .toUpperCase();
+    }
+  }
+
+  // Prénoms : première lettre de chaque partie en majuscule (ex: jean-jacques → Jean-Jacques)
+  for (const field of ['Prénom', 'Prénom_Mère', 'Prénom_Père']) {
+    if (data[field]) {
+      data[field] = capitalizeName(data[field]);
+    }
+  }
+
+  // Email : minuscules, suppression espaces
+  for (const field of ['Adresse mail', 'Adresse mail_Mère', 'Adresse mail_Père']) {
+    if (data[field]) {
+      data[field] = data[field].trim().toLowerCase();
+    }
+  }
+
+  // Téléphones : normalisation en groupes de 2 chiffres (ex: 06 12 34 56 78)
+  // Accepte aussi le format international +33...
+  for (const field of ['Téléphone fixe', 'Smartphone perso', 'Smartphone_Mère', 'Smartphone_Père']) {
+    if (data[field]) {
+      const raw = data[field].trim();
+      if (raw.startsWith('+33')) {
+        // Format international français : +336 12 34 56 78 → 06 12 34 56 78
+        const digits = '0' + raw.slice(3).replace(/\D/g, '');
+        data[field] = digits.replace(/(\d{2})(?=\d)/g, '$1 ');
+      } else {
+        // Format national 10 chiffres → groupes de 2
+        const digits = raw.replace(/\D/g, '');
+        data[field] = digits.replace(/(\d{2})(?=\d)/g, '$1 ');
+      }
+    }
+  }
+
+  // Date de naissance : normalisation en DD/MM/YYYY
+  if (data['Date de naissance']) {
+    const raw = data['Date de naissance'].trim();
+    // Accepte DD/MM/YYYY, DD-MM-YYYY ou DDMMYYYY
+    const match = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/) ||
+                  raw.match(/^(\d{2})(\d{2})(\d{4})$/);
+    if (match) {
+      const [, dd, mm, yyyy] = match;
+      data['Date de naissance'] = `${dd.padStart(2, '0')}/${mm.padStart(2, '0')}/${yyyy}`;
+    }
+  }
+}
+
 const checkData = ((data, fileName) => {
-  console.log('Validation des données...');
+  console.log('  Validation des données...');
 
   const errors = [];
 
@@ -118,19 +193,49 @@ const checkData = ((data, fileName) => {
   if(!data['Date de naissance']) {
     errors.push('Date de naissance');
   }
+  if(!data['Sexe']) {
+    errors.push('Sexe');
+  }
+  if(!data['Adresse mail']) {
+    errors.push('Adresse mail');
+  } else if(!/^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/.test(String(data['Adresse mail']).trim())) {
+    errors.push('Adresse mail (format invalide)');
+  }
+  if(!/^\d{2}\s?\d{3}$/.test(String(data['Code postal naissance'] || '').trim())) {
+    errors.push('Code postal naissance (format attendu : 5 chiffres, ex: 80000 ou 80 000)');
+  }
+  if(!data['Ville de naissance']) {
+    errors.push('Ville de naissance');
+  }
 
   if (errors.length > 0) {
-    //TODO écrire un compte rendu
+    //* écrire un compte rendu
     const error = {
       fileName,
       message: `Données invalides: ${errors.join(', ')} manquant${errors >1 ? s : ''}`
     }
+    //* Ajouter les moyens de contact existants
+    const contactFields = ["Téléphone fixe", "Smartphone perso", "Adresse mail", "Smartphone_Mère", "Adresse mail_Mère", "Smartphone_Père", "Adresse mail_Père"];
+    const contactInfos = new Map();
+    for (const field of contactFields) {
+      if (data[field]) {
+        contactInfos.set(field, data[field]);
+      }
+    }
+
+    if(contactInfos.size > 0) {
+      error.message += "\nMoyens de contact :\n";
+      contactInfos.forEach((value, key) => {
+        error.message += `- ${key} : ${value}\n`;
+      })
+    }
+
     conversionErrors.push(error);
 
     throw new Error(`Données invalides: ${errors.join(', ')} manquant${errors >1 ? s : ''}`);
   }
 
-  console.log('✅ Validation réussie');
+  console.log('  ✅ Validation réussie');
 })
 
 /**
@@ -287,7 +392,6 @@ async function addToExistingExcel(data, excelPath, sheetName) {
  */
 const files = await getFileNames();
 
-console.log('\n\nFichiers trouvés : ', files);
 const response = [];
 for (const file of files) {
   let result = await extractFormFields(file);
@@ -301,7 +405,9 @@ const dateStr = `${new Date().getFullYear().toString().substring(2)}-${new Date(
 const outputName = path.join(outDir, `result_${dateStr}.json`);
 
 await fs.writeFile(outputName, JSON.stringify(response, null, 2));
-console.log(`✅ Fichier JSON créé: ${path.basename(outputName)}`);
+const jsonFileUrl = `file:///${path.resolve(outputName).replace(/\\/g, '/')}`;
+const jsonLink = `\x1B]8;;${jsonFileUrl}\x1B\\${path.basename(outputName)}\x1B]8;;\x1B\\`;
+console.log(`✅ Fichier JSON créé: 🔗 ${jsonLink}`);
 
 //* Ajout des données au fichier Excel existant
 const excelPath = path.resolve(__dirname, 'misc/Fichier xls.xlsx');
@@ -314,9 +420,9 @@ for(let error of conversionErrors) {
   errorMessage += `${error.message}\n\n`;
 }
 
-console.log(`\n==========================================\n\n🚨 Rapport d'erreur :\n\n${errorMessage}`);
-const errorOutputName = path.join(outDir, `errors_${dateStr}.txt`);
+const errorFileName = `errors_${dateStr}.txt`;
+const errorOutputName = path.join(errorDir, errorFileName);
+const errorFileUrl = `file:///${path.resolve(errorOutputName).replace(/\\/g, '/')}`;
+const errorLink = `\x1B]8;;${errorFileUrl}\x1B\\${errorFileName}\x1B]8;;\x1B\\`;
+console.log(`\n==========================================\n\n🚨 Rapport d'erreur : 🔗 ${errorLink}\n\n${errorMessage}\n`);
 await fs.writeFile(errorOutputName, `Rapport d'erreurs :\n\n${errorMessage}`);
-
-//* Création du csv
-

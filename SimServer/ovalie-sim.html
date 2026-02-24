@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Oval-e — Simulation demande d'affiliation</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    /* ── Barre de simulation ── */
+    #sim-bar {
+      background: #222;
+      color: #fff;
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 13px;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    #sim-bar strong { color: #f0c040; }
+
+    #sim-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+    #sim-mode-toggle {
+      width: 16px; height: 16px; cursor: pointer;
+    }
+
+    #sim-mode-label { font-weight: bold; }
+
+    #sim-result {
+      margin-left: auto;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      display: none;
+    }
+
+    #sim-result.success { background: #2e7d32; color: #fff; display: block; }
+    #sim-result.error   { background: #c62828; color: #fff; display: block; }
+
+    /* ── Header ── */
+    #header {
+      background: #1a1a2e;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    #header .logo-text {
+      font-size: 20px;
+      font-weight: bold;
+      color: #f0c040;
+      letter-spacing: 2px;
+    }
+
+    #header nav a {
+      color: #ccc;
+      text-decoration: none;
+      margin: 0 10px;
+      font-size: 13px;
+    }
+
+    /* ── Conteneur ── */
+    .container { max-width: 960px; margin: 30px auto; padding: 0 20px; }
+
+    h2 { font-size: 18px; margin-bottom: 20px; color: #1a1a2e; }
+
+    /* ── Fieldset / étapes ── */
+    fieldset {
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+      margin-bottom: 24px;
+      padding: 0 0 16px;
+    }
+
+    .affiliation_etape {
+      background: #1a1a2e;
+      color: white;
+      padding: 10px 16px;
+      font-size: 15px;
+      margin-bottom: 16px;
+      border-radius: 3px 3px 0 0;
+    }
+
+    legend {
+      font-weight: bold;
+      font-size: 13px;
+      color: #555;
+      padding: 8px 16px 4px;
+      width: 100%;
+      border-bottom: 1px solid #eee;
+      margin-bottom: 12px;
+    }
+
+    /* ── Lignes de champs ── */
+    .row {
+      display: flex;
+      align-items: flex-start;
+      padding: 6px 16px;
+      gap: 12px;
+    }
+
+    .col-label {
+      width: 220px;
+      min-width: 220px;
+      text-align: right;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      padding-top: 6px;
+      color: #444;
+    }
+
+    .col-label.required::after {
+      content: " *";
+      color: #c00;
+    }
+
+    .col-field { flex: 1; }
+
+    .col-field input[type="text"],
+    .col-field input[type="email"],
+    .col-field input[type="date"],
+    .col-field select {
+      width: 100%;
+      padding: 5px 8px;
+      border: 1px solid #bbb;
+      border-radius: 3px;
+      font-size: 13px;
+      background: white;
+    }
+
+    .col-field input:focus,
+    .col-field select:focus {
+      outline: none;
+      border-color: #1a1a2e;
+      box-shadow: 0 0 0 2px rgba(26,26,46,0.15);
+    }
+
+    .col-field input.invalid,
+    .col-field select.invalid {
+      border-color: #c00;
+      background: #fff5f5;
+    }
+
+    .field-error {
+      color: #c00;
+      font-size: 11px;
+      margin-top: 3px;
+      display: none;
+    }
+
+    .field-error.visible { display: block; }
+
+    .hint {
+      color: #777;
+      font-size: 11px;
+      margin-top: 4px;
+      font-style: italic;
+    }
+
+    .obligatoire { color: #555; font-size: 12px; padding: 8px 16px; font-style: italic; }
+
+    /* ── Étape 2 ── */
+    .licence-section { padding: 0 16px 8px; }
+
+    .Padding20 { padding: 8px 16px; }
+
+    /* ── Footer bouton ── */
+    .stickyFooter {
+      background: white;
+      border-top: 2px solid #1a1a2e;
+      padding: 16px 20px;
+      margin-top: 32px;
+      text-align: right;
+    }
+
+    .btn-submit {
+      background: #1a1a2e;
+      color: white;
+      border: none;
+      padding: 10px 28px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .btn-submit:hover { background: #2d2d5e; }
+    .btn-submit:disabled { background: #aaa; cursor: not-allowed; }
+
+    /* ── Résultat modal ── */
+    #modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #modal-overlay.open { display: flex; }
+
+    #modal {
+      background: white;
+      border-radius: 6px;
+      padding: 32px;
+      max-width: 480px;
+      width: 90%;
+      text-align: center;
+    }
+
+    #modal h3 { font-size: 20px; margin-bottom: 12px; }
+    #modal p  { font-size: 14px; color: #555; margin-bottom: 24px; }
+    #modal.success h3 { color: #2e7d32; }
+    #modal.error   h3 { color: #c62828; }
+
+    #modal button {
+      background: #1a1a2e;
+      color: white;
+      border: none;
+      padding: 8px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Barre de simulation -->
+<div id="sim-bar">
+  <strong>[SIMULATION]</strong>
+  <label>
+    <input type="checkbox" id="sim-mode-toggle">
+    <span id="sim-mode-label">Mode : succès garanti</span>
+  </label>
+  <span id="sim-result"></span>
+</div>
+
+<!-- Header factice -->
+<div id="header">
+  <div class="logo-text">Oval-e</div>
+  <nav>
+    <a href="#">Accueil</a>
+    <a href="#">Structures</a>
+    <a href="#">Compétitions</a>
+    <a href="#">Affiliés</a>
+  </nav>
+</div>
+
+<!-- Contenu -->
+<div class="container">
+  <h2>Demande d'affiliation — Nouvelle licence</h2>
+
+  <form id="formAffiliation" method="post" action="/Affilies/DemandeAffiliation/Init" novalidate>
+
+    <!-- ═══════════════════════════════════ ÉTAPE 1 ═══════════════════════════════════ -->
+    <fieldset>
+      <h3 class="affiliation_etape">Étape 1 : Informations personnelles</h3>
+
+      <p class="obligatoire">Les informations marquées d'un astérisque (*) sont obligatoires.</p>
+
+      <legend>Infos licencié</legend>
+
+      <div class="row">
+        <div class="col-label required">Nom d'usage</div>
+        <div class="col-field">
+          <input type="text" id="Nom" name="Nom" maxlength="255">
+          <div class="field-error" id="err-Nom">Le champ Nom d'usage est requis.</div>
+          <div class="hint">Si vous n'avez pas de nom d'usage, renseignez votre nom de naissance.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Nom de naissance</div>
+        <div class="col-field">
+          <input type="text" id="NomUsage" name="NomUsage" maxlength="255">
+          <div class="field-error" id="err-NomUsage">Le champ Nom de naissance est requis.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Prénom</div>
+        <div class="col-field">
+          <input type="text" id="Prenom" name="Prenom" maxlength="255">
+          <div class="field-error" id="err-Prenom">Le champ Prénom est requis.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label">Prénom 2</div>
+        <div class="col-field">
+          <input type="text" id="Prenom2" name="Prenom2" maxlength="255">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label">Prénom 3</div>
+        <div class="col-field">
+          <input type="text" id="Prenom3" name="Prenom3" maxlength="255">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Sexe</div>
+        <div class="col-field">
+          <select id="RefSexeId" name="RefSexeId">
+            <option value=""> </option>
+            <option value="1">Masculin</option>
+            <option value="2">Féminin</option>
+          </select>
+          <div class="field-error" id="err-RefSexeId">Le champ Sexe est requis.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Nationalité</div>
+        <div class="col-field">
+          <select id="RefPaysNationaliteId" name="RefPaysNationaliteId">
+            <option value=""> </option>
+            <option value="99100">Française</option>
+            <option value="99132">Britannique</option>
+            <option value="99109">Espagnole</option>
+            <option value="99101">Albanaise</option>
+            <option value="99105">Belge</option>
+            <option value="99108">Espagnole</option>
+            <option value="99111">Irlandaise</option>
+            <option value="99114">Italienne</option>
+            <option value="99122">Néo-Zélandaise</option>
+            <option value="99134">Australienne</option>
+            <option value="99200">Autre</option>
+          </select>
+          <div class="field-error" id="err-RefPaysNationaliteId">Le champ Nationalité est requis.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Date de naissance</div>
+        <div class="col-field">
+          <input type="date" id="DateNaissance" name="DateNaissance" max="2023-02-21">
+          <div class="field-error" id="err-DateNaissance">Le champ Date de naissance est requis.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Pays de naissance</div>
+        <div class="col-field">
+          <select id="RefPaysInseeNaissanceId" name="RefPaysInseeNaissanceId">
+            <option value=""> </option>
+            <option value="100">France</option>
+            <option value="132">Royaume-Uni</option>
+            <option value="109">Espagne</option>
+            <option value="122">Nouvelle-Zélande</option>
+            <option value="134">Australie</option>
+            <option value="200">Autre</option>
+          </select>
+          <div class="field-error" id="err-RefPaysInseeNaissanceId">Pays de naissance incorrect.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Ville de naissance</div>
+        <div class="col-field">
+          <input type="text" id="VilleNaissance" name="VilleNaissance">
+          <div class="field-error" id="err-VilleNaissance">La ville de naissance est obligatoire.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Département de résidence</div>
+        <div class="col-field">
+          <select id="RefDepartementsInseeId" name="RefDepartementsInseeId">
+            <option value=""> </option>
+            <option value="80">Somme (80)</option>
+            <option value="62">Pas-de-Calais (62)</option>
+            <option value="59">Nord (59)</option>
+            <option value="60">Oise (60)</option>
+            <option value="02">Aisne (02)</option>
+            <option value="75">Paris (75)</option>
+            <option value="69">Rhône (69)</option>
+            <option value="999">Hors France</option>
+          </select>
+          <div class="field-error" id="err-RefDepartementsInseeId">Sélectionner un département.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Email</div>
+        <div class="col-field">
+          <input type="email" id="Email" name="Email" maxlength="255">
+          <div class="field-error" id="err-Email">Le champ Email est requis.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-label required">Confirmer l'email</div>
+        <div class="col-field">
+          <input type="email" id="ConfirmEmail" name="ConfirmEmail" maxlength="255">
+          <div class="field-error" id="err-ConfirmEmail">Les deux emails ne correspondent pas.</div>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- ═══════════════════════════════════ ÉTAPE 2 ═══════════════════════════════════ -->
+    <fieldset>
+      <h3 class="affiliation_etape">Étape 2 : Sélectionner les licences désirées</h3>
+
+      <div class="Padding20">
+        <legend>Licence joueur</legend>
+        <div class="row">
+          <div class="col-label">Licence joueur</div>
+          <div class="col-field">
+            <select id="QualiteJoueur_RefQualiteAffilieLicenceId" name="QualiteJoueur.RefQualiteAffilieLicenceId">
+              <option value=""> </option>
+              <option value="1">Joueur – Classique</option>
+              <option value="2">Joueur – Découverte</option>
+              <option value="3">Joueur – Loisir</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="Padding20">
+        <legend>Licence éducateur / entraîneur</legend>
+        <div class="row">
+          <div class="col-label">Licence technicien</div>
+          <div class="col-field">
+            <select id="QualiteEntraineur_RefQualiteAffilieLicenceId" name="QualiteEntraineur.RefQualiteAffilieLicenceId">
+              <option value=""> </option>
+              <option value="10">Entraîneur – Brevet d'État</option>
+              <option value="11">Entraîneur – CQP</option>
+              <option value="12">Aucun</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="Padding20">
+        <legend>Licence arbitre</legend>
+        <div class="row">
+          <div class="col-label">Licence arbitre</div>
+          <div class="col-field">
+            <select id="ArbitreLicence" name="ArbitreLicence">
+              <option value="">–</option>
+              <option value="true">Oui</option>
+              <option value="false">Non</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="Padding20">
+        <legend>Licence dirigeant</legend>
+        <div class="row">
+          <div class="col-label">Licence dirigeant</div>
+          <div class="col-field">
+            <select id="DirigeantLicence" name="DirigeantLicence">
+              <option value="">–</option>
+              <option value="true">Oui</option>
+              <option value="false">Non</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+    </fieldset>
+
+    <!-- Champs cachés -->
+    <input type="hidden" name="EligibleMutation" value="False">
+    <input type="hidden" name="SaisonId" value="29">
+    <input type="hidden" name="StructureClubId" value="1615">
+    <input type="hidden" name="StructureComiteId" value="3095">
+    <input type="hidden" name="ClubCode" value="7073N">
+    <input type="hidden" name="ClubNom" value="RUGBY OLYMPIQUE FLESSELLES">
+    <input type="hidden" name="ComiteCode" value="2007G">
+    <input type="hidden" name="ComiteNom" value="HAUTS DE FRANCE">
+    <input type="hidden" name="RefPersonneDemandeAffiliationTypeId" value="1">
+    <input type="hidden" name="AutreAffiliationEncours" value="False">
+    <input type="hidden" name="IsAssociationSportive" value="False">
+
+    <div class="stickyFooter">
+      <button type="submit" class="btn-submit" id="TransmettreLicencieBtn">Transmettre au licencié</button>
+    </div>
+
+  </form>
+</div>
+
+<!-- Modal résultat -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h3 id="modal-title"></h3>
+    <p id="modal-msg"></p>
+    <button onclick="closeModal()">Fermer</button>
+  </div>
+</div>
+
+<script>
+  const form = document.getElementById('formAffiliation');
+  const toggle = document.getElementById('sim-mode-toggle');
+  const modeLabel = document.getElementById('sim-mode-label');
+  const simResult = document.getElementById('sim-result');
+
+  // ── Gestion du mode simulation ──
+  toggle.addEventListener('change', async () => {
+    const mode = toggle.checked ? 'random-error' : 'success';
+    await fetch('/_sim/mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode })
+    });
+    modeLabel.textContent = toggle.checked
+      ? 'Mode : erreurs aléatoires (40%)'
+      : 'Mode : succès garanti';
+  });
+
+  // ── Validation côté client ──
+  function validateField(id, condition, errId) {
+    const el = document.getElementById(id);
+    const err = document.getElementById(errId);
+    if (!el || !err) return true;
+    const valid = condition(el.value);
+    el.classList.toggle('invalid', !valid);
+    err.classList.toggle('visible', !valid);
+    return valid;
+  }
+
+  function validateForm() {
+    let ok = true;
+
+    ok = validateField('Nom',      v => v.trim() !== '',  'err-Nom')      && ok;
+    ok = validateField('NomUsage', v => v.trim() !== '',  'err-NomUsage') && ok;
+    ok = validateField('Prenom',   v => v.trim() !== '',  'err-Prenom')   && ok;
+    ok = validateField('RefSexeId', v => v !== '',        'err-RefSexeId') && ok;
+    ok = validateField('RefPaysNationaliteId', v => v !== '', 'err-RefPaysNationaliteId') && ok;
+    ok = validateField('DateNaissance', v => v !== '',    'err-DateNaissance') && ok;
+    ok = validateField('RefPaysInseeNaissanceId', v => v !== '', 'err-RefPaysInseeNaissanceId') && ok;
+    ok = validateField('VilleNaissance', v => v.trim() !== '', 'err-VilleNaissance') && ok;
+    ok = validateField('RefDepartementsInseeId', v => v !== '', 'err-RefDepartementsInseeId') && ok;
+    ok = validateField('Email', v => v.trim() !== '' && v.includes('@'), 'err-Email') && ok;
+
+    // Confirmation email
+    const email = document.getElementById('Email').value;
+    const confirm = document.getElementById('ConfirmEmail').value;
+    const emailMatch = email === confirm && confirm !== '';
+    document.getElementById('ConfirmEmail').classList.toggle('invalid', !emailMatch);
+    document.getElementById('err-ConfirmEmail').classList.toggle('visible', !emailMatch);
+    ok = emailMatch && ok;
+
+    return ok;
+  }
+
+  // ── Soumission via fetch ──
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    simResult.className = '';
+    simResult.style.display = 'none';
+    simResult.textContent = '';
+
+    if (!validateForm()) return;
+
+    const btn = document.getElementById('TransmettreLicencieBtn');
+    btn.disabled = true;
+    btn.textContent = 'Envoi en cours...';
+
+    const data = new URLSearchParams(new FormData(form));
+
+    try {
+      const res = await fetch('/Affilies/DemandeAffiliation/Init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: data.toString()
+      });
+
+      const json = await res.json();
+
+      if (res.ok) {
+        showModal('success', '✅ Demande transmise', `La demande de licence de ${json.data.prenom} ${json.data.nom} a été envoyée avec succès (HTTP ${res.status}).`);
+        simResult.textContent = `✅ HTTP ${res.status}`;
+        simResult.className = 'success';
+      } else {
+        showModal('error', `❌ Erreur HTTP ${res.status}`, json.error || 'Une erreur est survenue.');
+        simResult.textContent = `❌ HTTP ${res.status}`;
+        simResult.className = 'error';
+      }
+    } catch (err) {
+      showModal('error', '❌ Erreur réseau', 'Impossible de joindre le serveur.');
+      simResult.textContent = '❌ Erreur réseau';
+      simResult.className = 'error';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Transmettre au licencié';
+    }
+  });
+
+  function showModal(type, title, msg) {
+    const overlay = document.getElementById('modal-overlay');
+    const modal   = document.getElementById('modal');
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-msg').textContent   = msg;
+    modal.className = type;
+    overlay.classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+  }
+</script>
+</body>
+</html>

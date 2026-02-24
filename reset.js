@@ -1,5 +1,5 @@
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 const rootDir = './';
 const convertedDir = './converted';
@@ -43,6 +43,10 @@ async function reset() {
           console.log(`  ✅ ${file} déplacé vers la racine`);
           movedCount++;
         }
+        if (file.endsWith('.txt')) {
+          console.log(`  🗑️  fichier erreur supprimé : ${file}`);
+          await fs.rm(path.join(erroredDir, file));
+        }
       }
     } catch (err) {
       if (err.code !== 'ENOENT') {
@@ -51,7 +55,7 @@ async function reset() {
     }
 
     // 3. Supprimer tous les fichiers .json de ./converted
-    console.log('\n🗑️  Suppression des fichiers JSON et txt...');
+    console.log('\n🗑️  Suppression des fichiers JSON...');
     try {
       const convertedFiles = await fs.readdir(convertedDir);
       for (const file of convertedFiles) {
@@ -80,4 +84,4 @@ async function reset() {
   }
 }
 
-reset();
+await reset();

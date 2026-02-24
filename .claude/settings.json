@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(node generate-test-pdfs.js:*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\werqu\\Desktop\\WebDev\\pdf-parser\\.claude\\skills"
+    ]
+  }
+}

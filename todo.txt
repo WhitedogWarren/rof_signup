@@ -1,0 +1,112 @@
+TODO — Projet ROF PDF Parser + Extension Chrome
+================================================
+
+
+── CORRESPONDANCE JSON ↔ FORMULAIRE (points en suspens) 🚧 ─────────────────────
+
+1. NomUsage (Nom de naissance)
+   - Situation actuelle : mappé temporairement sur "Nom" (nom d'usage).
+   - Problème : le nom de naissance peut différer du nom d'usage (cas des femmes
+     mariées, noms composés, etc.).
+   - Question : faut-il ajouter un champ "Nom de naissance" dans le PDF ?
+
+2. RefPaysNationaliteId (Nationalité)
+   - Situation actuelle : positionné par défaut sur "Française" (valeur 99100).
+   - Problème : tous les licenciés ne sont pas de nationalité française.
+   - Question : faut-il ajouter un champ "Nationalité" dans le PDF ?
+     Si oui, prévoir un mapping texte → identifiant numérique Oval-e.
+
+3. RefPaysInseeNaissanceId (Pays de naissance)
+   - Situation actuelle : positionné par défaut sur "France" (valeur 100).
+   - Problème : certains licenciés peuvent être nés à l'étranger.
+   - Question : faut-il ajouter un champ "Pays de naissance" dans le PDF ?
+     Si oui, prévoir un mapping texte → identifiant numérique Oval-e,
+     et gérer le cas où le pays n'est pas la France (champ VilleNaissance
+     en saisie libre vs. RefCommunesInseeId pour la France).
+
+4. Département de résidence
+   - Voir à modifier le PDF. Le champ "Code postal" semble être celui du code postal de naissance.
+     Les champs adresse ne contiennent pas d'entrée spécifique pour la ville et le code postal.
+
+
+── TESTS ✅ ────────────────────────────────────────────────────────────────────
+
+4. Créer des fichiers PDF de test couvrant les scénarios suivants :
+   - Formulaire complet et valide (cas nominal)
+   - Champs obligatoires manquants (Nom, Prénom, Date de naissance, Sexe,
+     Adresse mail, Code postal, Ville de naissance)
+   - Code postal mal formaté (ex: 4 chiffres, lettres, vide)
+   - Emails invalides ou absents
+   - Cas limites : noms avec caractères spéciaux, accents, tirets
+
+
+── TRAITEMENT DES DONNÉES (rof-signup.js) ✅ ────────────────────────────────────
+
+5. Nettoyage et reformatage des champs via expressions régulières :
+   - Nom / Prénom :
+     - Noms (Nom, Nom_Mère, Nom_Père) : tout en majuscules (.toUpperCase()).
+       Ex : dupont martin => DUPONT MARTIN
+     - Prénoms (Prénom, Prénom_Mère, Prénom_Père) : première lettre de chaque partie
+       en majuscule, reste en minuscule. Les parties sont séparées par un espace ou un tiret.
+       Ex : jean jacques  => Jean Jacques
+            jean-jacques  => Jean-Jacques
+            MARIE         => Marie
+   - Numéros de téléphone : normalisation du format
+     (ex: 0612345678 ou +336 12 34 56 78 ou 06.12.34.56.78 → 06 12 34 56 78 )
+   - Date de naissance : vérifier et normaliser le format DD/MM/YYYY
+   - Email : mise en minuscules, suppression des espaces
+   - Ne pas produire de json avec une liste vide.
+
+
+── RAPPORT D'ERREURS (rof-signup.js) 🚧 ────────────────────────────────────
+
+8. Améliorer la formulation et la pertinence du rapport d'erreurs :
+
+   a) Distinguer "manquant" et "invalide" dans les messages d'erreur.
+      - Actuellement, tous les problèmes sont formulés "X manquant", même quand
+        le champ est présent mais mal formaté.
+      - Exemples attendus :
+          "Code postal naissance invalide (format attendu : 5 chiffres, ex: 80000)"
+          "Adresse mail invalide"
+          "Nom manquant"
+      - Cela implique de distinguer les erreurs de type "absent" des erreurs de type
+        "présent mais incorrect" dans checkData(), et d'adapter le message en conséquence.
+
+   b) Ne pas inclure l'adresse mail dans les "moyens de contact" si elle est invalide.
+      - Actuellement, si l'email est présent mais malformé, il apparaît quand même
+        dans la section "Moyens de contact" du rapport.
+      - Or un email invalide n'est pas un moyen de contact utilisable — autant contacter
+        quelqu'un par pigeon voyageur.
+      - Correction : n'ajouter l'email aux contacts que s'il passe la validation de format.
+
+
+── EXTENSION CHROME 🚧 ───────────────────────────────────────────────────────
+
+6. Soumission automatique du formulaire depuis l'extension :
+   - Proposer un bouton pour traiter tout le lot.
+     les items seront alors traités un par un. L'extension remplit et soumet le formulaire,
+     puis attends le resultat du call API. Si le code correspond à un succès, l'item est enlevé
+     de la liste, et on passe au suivant.
+     Si le code correspond à un echec, l'item est toujours present dans la liste. On y affiche alors
+     un bouton pour retenter la soumission.
+   - Proposer également pour chaque item un bouton permettant de traiter individuellement l'item.
+   - Proposer un bouton pour suspendre le traitement.
+     Il faut alors pouvoir renvoyer à l'application node l'ensemble des items
+     qui n'ont pas été traités pour mettre à jour le fichier json plutôt que le supprimer.
+
+7. Gestion de la réponse du site après soumission :
+   - Succès (HTTP 201) : marquer l'item comme traité automatiquement,
+     afficher une confirmation dans le popup.
+   - Erreur serveur (HTTP 401, 403, 500) : afficher le message d'erreur,
+     proposer de réessayer.
+   - Erreur réseau : signaler que le site est inaccessible.
+
+8. Synchronisation du fichier JSON lors du traitement item par item :
+   - Problème : quand l'utilisateur traite les items manuellement (un par un),
+     les items supprimés de l'UI ne sont pas retirés du fichier JSON sur le serveur.
+     Le fichier reste intact jusqu'à ce que tous les items soient traités (DELETE).
+   - Solution : ajouter un bouton "Sauvegarder et quitter" (ou équivalent) dans le header,
+     visible dès qu'au moins un item a été traité avec succès.
+     Ce bouton envoie un PATCH au serveur avec les records restants,
+     permettant de reprendre le traitement plus tard sans reperdre la progression.
+   

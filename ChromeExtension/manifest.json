@@ -1,0 +1,24 @@
+{
+  "name": "ROF - Fichiers convertis",
+  "description": "Consulte et valide les fichiers JSON produits par le parser PDF",
+  "version": "1.0",
+  "manifest_version": 3,
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "hello_extensions.png"
+  },
+  "permissions": [
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:3001/*",
+    "http://localhost:3002/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:3002/*"],
+      "js": ["content.js"]
+    }
+  ]
+}

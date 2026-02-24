@@ -4,3 +4,5 @@ misc
 *.pdf
 *.code-workspace
 .claude/settings.local.json
+logs.txt
+pdf-parser.zip
