@@ -1,6 +1,8 @@
-# Extracteur de formulaires PDF - ROF Signup
+# ROF Signup — Extracteur de formulaires PDF + Extension Chrome
 
-Script automatique pour extraire les données des formulaires PDF d'inscription.
+Outil complet pour extraire les données des formulaires PDF d'inscription ROF,
+les valider, les exporter en JSON et en Excel, puis les soumettre automatiquement
+au site Oval-e via une extension Chrome.
 
 ## Installation
 
@@ -10,85 +12,102 @@ npm install
 
 ## Utilisation
 
-### Extraction des formulaires PDF
+### 1. Extraction des formulaires PDF
 
-1. Placez vos fichiers PDF dans le dossier principal du projet
-2. Lancez le script d'extraction :
+Placez vos fichiers PDF dans le dossier racine du projet, puis lancez :
 
 ```bash
 npm run run
-# ou
-node rof-signup.js
 ```
 
-3. Les fichiers JSON sont automatiquement créés dans `converted/`
-4. Les PDFs traités sont déplacés dans `converted/`
+Le script :
+- Extrait les données de chaque PDF (champs texte, dates, checkboxes, selects)
+- Normalise et valide les données (noms, prénoms, emails, téléphones, dates)
+- Déplace les PDFs valides dans `converted/`, les invalides dans `errored/`
+- Génère un fichier `result_JJ-MM-AAAA.json` dans `converted/`
+- Met à jour le fichier Excel `misc/Fichier xls.xlsx`
+- Génère un rapport d'erreurs `errors_JJ-MM-AAAA.txt` dans `errored/`
 
-### Réinitialisation du projet
+### 2. Soumission via l'extension Chrome
 
-Pour remettre le projet à zéro (redéplacer les PDFs et supprimer les JSON) :
+Le serveur local expose les fichiers JSON extraits à l'extension :
+
+```bash
+npm run server   # Serveur API sur http://localhost:3001
+npm run sim      # Simulateur du site Oval-e sur http://localhost:3002
+```
+
+L'extension Chrome (`ChromeExtension/`) permet de :
+- Visualiser les inscriptions extraites fichier par fichier
+- Soumettre chaque inscription individuellement au site Oval-e
+- Traiter tout le lot automatiquement ("Tout traiter")
+- Suspendre le traitement en cours ("Pause") — les records restants sont sauvegardés
+
+### 3. Réinitialisation
+
+Pour remettre le projet à zéro (redéplacer les PDFs, supprimer les JSON/TXT) :
 
 ```bash
 npm run reset
 ```
 
-Ce script :
-- Redéplace tous les PDFs de `./converted/` et `./errored/` vers la racine du projet
-- Supprime tous les fichiers JSON générés
-- Vous permet de relancer le traitement facilement
+## Structure du projet
 
-## Fonctionnalités
-
- ✅ Extraction automatique de tous les champs du formulaire<br>
- ✅ Support des champs texte, checkboxes, dropdowns, radio buttons<br>
- ✅ Extraction complète du champ date de naissance (`Date3_af_date`)<br>
- ✅ Validation stricte des champs obligatoires (Nom, Prénom, date de naissance)<br>
- ✅ Génération de fichiers JSON nommés selon le format `Nom_Prénom_JJ-MM-AAAA.json`<br>
- ✅ Déplacement automatique des PDFs traités dans `converted/` ou `errored/`<br>
- ✅ Gestion robuste des erreurs avec messages clairs<br>
- ✅ Script de réinitialisation pour recommencer facilement
-
-## Structure des fichiers générés
-
-```json
-{
-  "Nom": "Dupont",
-  "Prénom": "Jean",
-  "Date3_af_date": "01/01/2001",
-  "Dropdown2": "M",
-  "Téléphone fixe": "0123456789",
-  "Adresse": "123 rue Example",
-  ...
-}
+```
+pdf-parser/
+├── rof-signup.js          Extraction, validation et export des PDFs
+├── reset.js               Réinitialisation du projet
+├── server.js              API locale pour l'extension Chrome (port 3001)
+├── simulator.js           Simulateur du site Oval-e (port 3002)
+├── package.json
+├── README.md
+├── converted/             PDFs traités avec succès, JSONs et rapports générés
+├── errored/               PDFs rejetés + rapports d'erreurs
+├── misc/
+│   └── Fichier xls.xlsx   Fichier Excel mis à jour à chaque extraction
+└── ChromeExtension/
+    ├── manifest.json
+    ├── popup.html
+    ├── popup.js            Logique de l'extension (liste, soumission, pause)
+    └── content.js          Remplissage et soumission du formulaire Oval-e
 ```
 
 ## Scripts npm disponibles
 
 | Commande | Description |
 |----------|-------------|
-| `npm run run` | Lance l'extraction des formulaires PDF |
-| `npm run reset` | Réinitialise le projet (redéplace PDFs, supprime JSONs) |
+| `npm run run` | Extraction et validation des PDFs |
+| `npm run reset` | Réinitialisation (redéplace PDFs, supprime JSONs) |
+| `npm run server` | Démarre le serveur API (port 3001) |
+| `npm run sim` | Démarre le simulateur Oval-e (port 3002) |
+
+## Exemple de données extraites
+
+```json
+{
+  "Nom": "DUPONT",
+  "Prénom": "Jean-Jacques",
+  "Date de naissance": "01/01/2001",
+  "Sexe": "M",
+  "Adresse mail": "jean.dupont@example.com",
+  "Ville de naissance": "Amiens",
+  "Code postal naissance": "80000",
+  "Téléphone fixe": "03 22 00 00 00",
+  "Smartphone perso": "06 12 34 56 78"
+}
+```
 
 ## Dépannage
 
 **Le fichier PDF n'est pas déplacé automatiquement**
-→ Normal sous Windows si un processus verrouille le fichier. Le JSON est quand même créé.
+→ Normal sous Windows si un processus verrouille le fichier (lecteur PDF ouvert).
+  Le JSON est quand même créé.
 
 **Erreur "EBUSY: resource busy"**
 → Fermez tous les lecteurs PDF et réessayez.
 
 **Je veux recommencer le traitement**
-→ Lancez `npm run reset` pour remettre tous les PDFs à la racine et supprimer les JSON générés.
+→ Lancez `npm run reset` pour remettre tous les PDFs à la racine et supprimer les fichiers générés.
 
-## Structure du projet
-
-```
-pdf-parser/
-├── rof-signup.js          Fichier principal d'extraction
-├── reset.js               Script de réinitialisation
-├── package.json           Configuration npm
-├── README.md              Ce fichier
-├── converted/             PDFs traités avec succès + JSONs générés
-├── errored/               PDFs avec erreurs de validation
-└── node_modules/          Dépendances npm
-```
+**L'extension ne trouve pas le serveur**
+→ Vérifiez que `npm run server` est bien lancé et que l'onglet `localhost:3002` est ouvert dans Chrome.

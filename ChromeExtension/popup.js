@@ -200,9 +200,8 @@ function setItemError(itemEl, fileName, record, index, status, message) {
 
   const msgEl = document.createElement('div');
   msgEl.className = 'item-error-msg';
-  msgEl.textContent = status
-    ? `Erreur HTTP ${status}${message ? ' — ' + message : ''}`
-    : (message || 'Erreur inconnue');
+  const detail = message ? ` — ${message}` : '';
+  msgEl.textContent = status ? `Erreur HTTP ${status}${detail}` : (message || 'Erreur inconnue');
   itemEl.querySelector('.file-header').after(msgEl);
 }
 
@@ -279,4 +278,4 @@ function renderRecord(record) {
 }
 
 // Chargement initial
-loadFiles();
+await loadFiles();

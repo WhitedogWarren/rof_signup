@@ -8,6 +8,25 @@ const outDir = path.resolve(__dirname, 'converted');
 const errorDir = path.resolve(__dirname, 'errored');
 const conversionErrors = [];
 
+const REQUIRED_FIELDS = ['Nom', 'Prénom', 'Date de naissance', 'Sexe', 'Adresse mail', 'Ville de naissance'];
+
+// Regex RFC 5322 — structure intentionnellement conservée, toute modification risque de casser la validation
+const EMAIL_REGEX = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}])|(([a-zA-Z\-\d]+\.)+[a-zA-Z]{2,}))$/;
+
+// Chaque entrée associe un champ à sa regex de validation et au message d'erreur attendu
+const FORMAT_VALIDATIONS = [
+  {
+    field: 'Adresse mail',
+    regex: EMAIL_REGEX,
+    errorMessage: 'Adresse mail (format invalide)',
+  },
+  {
+    field: 'Code postal naissance',
+    regex: /^\d{2}\s?\d{3}$/,
+    errorMessage: 'Code postal naissance (format attendu : 5 chiffres, ex: 80000 ou 80 000)',
+  },
+];
+
 // Désactiver les warnings de pdfjs
 const originalWarn = console.warn;
 console.warn = (...args) => {
@@ -62,9 +81,6 @@ async function extractFormFields(fileName) {
         else if (type === 'PDFDropdown' || type === 'PDFOptionList') {
           value = field.getSelected()[0];
         }
-        else {
-          value = null;
-        }
       } catch (e) {
         // Certaines apparences de champs peuvent être "flattend" ou invalides
         console.log(`Erreur sur ${fieldName}:`, e.message);
@@ -85,11 +101,11 @@ async function extractFormFields(fileName) {
     try {
       await fs.rename(pdfPath, path.join(outDir, fileName));
       console.log(`  📁 déplacé dans ./converted/\n`);
-    } catch (renameErr) {
-      console.log(`  🚨 Impossible de déplacer automatiquement (fichier verrouillé)\n`);
+    } catch (error_) {
+      console.log(`  🚨 Impossible de déplacer automatiquement (fichier verrouillé) : ${error_.message}\n`);
     }
     return result;
-    
+
   } catch (err) {
     console.error('  🚨 Erreur lors de l\'extraction!\n  => ', err.message);
 
@@ -99,8 +115,8 @@ async function extractFormFields(fileName) {
     try {
       await fs.rename(pdfPath, path.join('./errored', fileName));
       console.log(`  📁 Fichier déplacé dans ./errored/\n`);
-    } catch (renameErr) {
-      console.log(`🚨 Impossible de déplacer automatiquement (fichier verrouillé)\n`);
+    } catch (error_) {
+      console.log(`🚨 Impossible de déplacer automatiquement (fichier verrouillé) : ${error_.message}\n`);
     }
 
   }
@@ -110,9 +126,9 @@ async function extractFormFields(fileName) {
 function capitalizeName(str) {
   return str
     .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/\s*-\s*/g, '-')
-    .replace(/\s*'\s*/g, "'")
+    .replaceAll(/\s+/g, ' ')
+    .replaceAll(/\s*-\s*/g, '-')
+    .replaceAll(/\s*'\s*/g, "'")
     .split(/(?=[-\s])/)
     .map(part => {
       const sep = part.match(/^[-\s]/) ? part[0] : '';
@@ -122,59 +138,70 @@ function capitalizeName(str) {
     .join('');
 }
 
+// Normalise un numéro de téléphone en groupes de 2 chiffres (ex: 06 12 34 56 78)
+// Gère le format international +33 et le format national 10 chiffres
+function normalizePhone(raw) {
+  if (raw.startsWith('+33')) {
+    const digits = '0' + raw.slice(3).replaceAll(/\D/g, '');
+    return digits.replaceAll(/(\d{2})(?=\d)/g, '$1 ');
+  }
+  const digits = raw.replaceAll(/\D/g, '');
+  return digits.replaceAll(/(\d{2})(?=\d)/g, '$1 ');
+}
+
+// Normalise une date en DD/MM/YYYY
+// Accepte DD/MM/YYYY, DD-MM-YYYY ou DDMMYYYY
+function normalizeBirthDate(raw) {
+  const match = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/) ||
+                raw.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (!match) return raw;
+  const [, dd, mm, yyyy] = match;
+  return `${dd.padStart(2, '0')}/${mm.padStart(2, '0')}/${yyyy}`;
+}
+
 function normalizeData(data) {
-  // Noms : MAJUSCULES, espaces et tirets normalisés
+  normalizeNames(data);
+  normalizeFirstNames(data);
+  normalizeEmails(data);
+  normalizePhones(data);
+  if (data['Date de naissance']) {
+    data['Date de naissance'] = normalizeBirthDate(data['Date de naissance'].trim());
+  }
+}
+
+function normalizeNames(data) {
   for (const field of ['Nom', 'Nom_Mère', 'Nom_Père']) {
     if (data[field]) {
       data[field] = data[field]
         .trim()
-        .replace(/\s+/g, ' ')
-        .replace(/\s*-\s*/g, '-')
-        .replace(/\s*'\s*/g, "'")
+        .replaceAll(/\s+/g, ' ')
+        .replaceAll(/\s*-\s*/g, '-')
+        .replaceAll(/\s*'\s*/g, "'")
         .toUpperCase();
     }
   }
+}
 
-  // Prénoms : première lettre de chaque partie en majuscule (ex: jean-jacques → Jean-Jacques)
+function normalizeFirstNames(data) {
   for (const field of ['Prénom', 'Prénom_Mère', 'Prénom_Père']) {
     if (data[field]) {
       data[field] = capitalizeName(data[field]);
     }
   }
+}
 
-  // Email : minuscules, suppression espaces
+function normalizeEmails(data) {
   for (const field of ['Adresse mail', 'Adresse mail_Mère', 'Adresse mail_Père']) {
     if (data[field]) {
       data[field] = data[field].trim().toLowerCase();
     }
   }
+}
 
-  // Téléphones : normalisation en groupes de 2 chiffres (ex: 06 12 34 56 78)
-  // Accepte aussi le format international +33...
+function normalizePhones(data) {
   for (const field of ['Téléphone fixe', 'Smartphone perso', 'Smartphone_Mère', 'Smartphone_Père']) {
     if (data[field]) {
-      const raw = data[field].trim();
-      if (raw.startsWith('+33')) {
-        // Format international français : +336 12 34 56 78 → 06 12 34 56 78
-        const digits = '0' + raw.slice(3).replace(/\D/g, '');
-        data[field] = digits.replace(/(\d{2})(?=\d)/g, '$1 ');
-      } else {
-        // Format national 10 chiffres → groupes de 2
-        const digits = raw.replace(/\D/g, '');
-        data[field] = digits.replace(/(\d{2})(?=\d)/g, '$1 ');
-      }
-    }
-  }
-
-  // Date de naissance : normalisation en DD/MM/YYYY
-  if (data['Date de naissance']) {
-    const raw = data['Date de naissance'].trim();
-    // Accepte DD/MM/YYYY, DD-MM-YYYY ou DDMMYYYY
-    const match = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/) ||
-                  raw.match(/^(\d{2})(\d{2})(\d{4})$/);
-    if (match) {
-      const [, dd, mm, yyyy] = match;
-      data['Date de naissance'] = `${dd.padStart(2, '0')}/${mm.padStart(2, '0')}/${yyyy}`;
+      data[field] = normalizePhone(data[field].trim());
     }
   }
 }
@@ -182,124 +209,52 @@ function normalizeData(data) {
 const checkData = ((data, fileName) => {
   console.log('  Validation des données...');
 
-  const errors = [];
-
-  if(!data['Nom']) {
-    errors.push('Nom');
-  }
-  if(!data['Prénom']) {
-    errors.push('Prénom');
-  }
-  if(!data['Date de naissance']) {
-    errors.push('Date de naissance');
-  }
-  if(!data['Sexe']) {
-    errors.push('Sexe');
-  }
-  if(!data['Adresse mail']) {
-    errors.push('Adresse mail');
-  } else if(!/^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/.test(String(data['Adresse mail']).trim())) {
-    errors.push('Adresse mail (format invalide)');
-  }
-  if(!/^\d{2}\s?\d{3}$/.test(String(data['Code postal naissance'] || '').trim())) {
-    errors.push('Code postal naissance (format attendu : 5 chiffres, ex: 80000 ou 80 000)');
-  }
-  if(!data['Ville de naissance']) {
-    errors.push('Ville de naissance');
-  }
+  const errors = [...listMissingFields(data), ...listInvalidFormats(data)];
 
   if (errors.length > 0) {
-    //* écrire un compte rendu
-    const error = {
-      fileName,
-      message: `Données invalides: ${errors.join(', ')} manquant${errors >1 ? s : ''}`
-    }
-    //* Ajouter les moyens de contact existants
-    const contactFields = ["Téléphone fixe", "Smartphone perso", "Adresse mail", "Smartphone_Mère", "Adresse mail_Mère", "Smartphone_Père", "Adresse mail_Père"];
-    const contactInfos = new Map();
-    for (const field of contactFields) {
-      if (data[field]) {
-        contactInfos.set(field, data[field]);
-      }
-    }
-
-    if(contactInfos.size > 0) {
-      error.message += "\nMoyens de contact :\n";
-      contactInfos.forEach((value, key) => {
-        error.message += `- ${key} : ${value}\n`;
-      })
-    }
-
-    conversionErrors.push(error);
-
-    throw new Error(`Données invalides: ${errors.join(', ')} manquant${errors >1 ? s : ''}`);
+    conversionErrors.push(buildErrorReport(data, fileName, errors));
+    throw new Error(`Données invalides: ${errors.join(', ')}`);
   }
 
   console.log('  ✅ Validation réussie');
 })
 
-/**
- * Nettoie les lignes vides du fichier Excel
- */
+function listMissingFields(data) {
+  return REQUIRED_FIELDS
+    .filter(field => !data[field])
+    .map(field => `${field} manquant`);
+}
+
+function listInvalidFormats(data) {
+  return FORMAT_VALIDATIONS
+    .filter(({ field }) => data[field]) // champ présent — sinon déjà signalé comme manquant
+    .filter(({ field, regex }) => !regex.test(String(data[field]).trim()))
+    .map(({ errorMessage }) => errorMessage);
+}
+
+function buildErrorReport(data, fileName, errors) {
+  const contactFields = ['Téléphone fixe', 'Smartphone perso', 'Adresse mail', 'Smartphone_Mère', 'Adresse mail_Mère', 'Smartphone_Père', 'Adresse mail_Père'];
+
+  const label = errors.length > 1 ? 'Données invalides' : 'Donnée invalide';
+  const mappedErrors = errors.map(e => `- ${e}`).join('\n');
+  let message = `${label}:\n${mappedErrors}`;
+
+  const contactLines = contactFields
+    .filter(field => data[field])
+    .map(field => `- ${field} : ${data[field]}`);
+
+  if (contactLines.length > 0) {
+    message += `\nMoyens de contact :\n${contactLines.join('\n')}`;
+  }
+
+  return { fileName, message };
+}
+
 function cleanEmptyRows(worksheet) {
   const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-
-  // Récupérer tous les en-têtes (ligne 0)
-  const excelHeaders = [];
-  for (let col = range.s.c; col <= range.e.c; col++) {
-    const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
-    const cell = worksheet[cellRef];
-    excelHeaders.push(cell ? cell.v : '');
-  }
-
-  // Récupérer toutes les lignes avec contenu
-  const rowsWithData = [];
-  for (let row = 1; row <= range.e.r; row++) {
-    let hasData = false;
-    const rowData = {};
-
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
-      const cell = worksheet[cellRef];
-      const value = cell ? cell.v : '';
-
-      if (value && String(value).trim() && String(value).trim() !== ' ') {
-        hasData = true;
-      }
-      rowData[col] = value;
-    }
-
-    if (hasData) {
-      rowsWithData.push(rowData);
-    }
-  }
-
-  // Créer une nouvelle feuille propre
-  const newSheet = {};
-
-  // Ajouter les en-têtes
-  excelHeaders.forEach((header, col) => {
-    const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
-    newSheet[cellRef] = { v: header, t: 's' };
-  });
-
-  // Ajouter les lignes avec contenu
-  rowsWithData.forEach((rowData, rowIdx) => {
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cellRef = XLSX.utils.encode_cell({ r: rowIdx + 1, c: col });
-      const value = rowData[col];
-      newSheet[cellRef] = {
-        v: value || '',
-        t: 's'
-      };
-    }
-  });
-
-  // Définir la nouvelle plage
-  newSheet['!ref'] = XLSX.utils.encode_range({
-    s: { r: 0, c: 0 },
-    e: { r: rowsWithData.length, c: range.e.c }
-  });
+  const headers = extractHeaders(worksheet, range);
+  const rowsWithData = extractNonEmptyRows(worksheet, range);
+  const newSheet = buildCleanSheet(headers, rowsWithData, range);
 
   if (rowsWithData.length < range.e.r) {
     console.log(`🧹 Suppression de ${range.e.r - rowsWithData.length} ligne(s) vide(s)`);
@@ -308,83 +263,127 @@ function cleanEmptyRows(worksheet) {
   return newSheet;
 }
 
+function extractHeaders(worksheet, range) {
+  const headers = [];
+  for (let col = range.s.c; col <= range.e.c; col++) {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: 0, c: col })];
+    headers.push(cell ? cell.v : '');
+  }
+  return headers;
+}
+
+function extractNonEmptyRows(worksheet, range) {
+  const rows = [];
+  for (let row = 1; row <= range.e.r; row++) {
+    const rowData = extractRowData(worksheet, range, row);
+    if (rowHasContent(rowData)) {
+      rows.push(rowData);
+    }
+  }
+  return rows;
+}
+
+function extractRowData(worksheet, range, row) {
+  const rowData = {};
+  for (let col = range.s.c; col <= range.e.c; col++) {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: col })];
+    rowData[col] = cell ? cell.v : '';
+  }
+  return rowData;
+}
+
+function rowHasContent(rowData) {
+  return Object.values(rowData).some(value =>
+    value && String(value).trim() && String(value).trim() !== ' '
+  );
+}
+
+function buildCleanSheet(headers, rowsWithData, range) {
+  const sheet = {};
+
+  headers.forEach((header, col) => {
+    sheet[XLSX.utils.encode_cell({ r: 0, c: col })] = { v: header, t: 's' };
+  });
+
+  rowsWithData.forEach((rowData, rowIdx) => {
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      sheet[XLSX.utils.encode_cell({ r: rowIdx + 1, c: col })] = {
+        v: rowData[col] || '',
+        t: 's'
+      };
+    }
+  });
+
+  sheet['!ref'] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: rowsWithData.length, c: range.e.c }
+  });
+
+  return sheet;
+}
+
 /**
  * Ajoute les données au fichier Excel existant avec matching des colonnes
  */
 async function addToExistingExcel(data, excelPath, sheetName) {
   try {
-    // Lire le fichier Excel existant
-    const workbook = XLSX.readFile(excelPath);
-    let worksheet = workbook.Sheets[sheetName];
-
-    // Nettoyer les lignes vides
-    worksheet = cleanEmptyRows(worksheet);
-    workbook.Sheets[sheetName] = worksheet;
-
-    // Récupérer la plage et extraire les en-têtes directement des cellules
-    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-    const excelHeaders = [];
-
-    // Lire les en-têtes depuis la première ligne
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
-      const cell = worksheet[cellRef];
-      excelHeaders.push(cell ? cell.v : '');
-    }
-
-    const lastRow = range.e.r + 1; // Dernière ligne + 1
-
-    // Fonction pour normaliser les noms de colonnes
-    const normalizeHeader = (header) => {
-      return (header || '')
-        .replace(/\r\n/g, ' ')
-        .replace(/\r/g, ' ')
-        .replace(/\n/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLowerCase();
-    };
-
-    // Ajouter chaque ligne de données
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      const rowIndex = lastRow + i;
-
-      // Pour chaque colonne Excel, trouver la valeur correspondante
-      for (let colIndex = 0; colIndex < excelHeaders.length; colIndex++) {
-        const excelHeader = excelHeaders[colIndex];
-        const normalizedExcelHeader = normalizeHeader(excelHeader);
-        let value = '';
-
-        // Chercher une clé correspondante dans les données JSON
-        for (const [jsonKey, jsonValue] of Object.entries(row)) {
-          if (normalizeHeader(jsonKey) === normalizedExcelHeader) {
-            value = jsonValue || '';
-            break;
-          }
-        }
-
-        const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
-        worksheet[cellRef] = {
-          v: value,
-          t: typeof value === 'number' ? 'n' : 's'
-        };
-      }
-    }
-
-    // Mettre à jour la plage
-    const newRange = XLSX.utils.encode_range({
-      s: { r: 0, c: 0 },
-      e: { r: lastRow + data.length - 1, c: range.e.c }
-    });
-    worksheet['!ref'] = newRange;
-
-    // Sauvegarder le fichier
+    const { workbook, worksheet, headers, lastRow, range } = loadWorksheet(excelPath, sheetName);
+    writeDataRows(worksheet, data, headers, lastRow);
+    updateSheetRange(worksheet, lastRow, data.length, range.e.c);
     XLSX.writeFile(workbook, excelPath);
     console.log(`✅ Fichier Excel mis à jour: ${path.basename(excelPath)} (${data.length} ligne(s) ajoutée(s))`);
   } catch (err) {
     console.error('🚨 Erreur lors de l\'ajout au fichier Excel:', err.message);
   }
+}
+
+// Normalise un nom de colonne pour le matching insensible à la casse et aux espaces
+function normalizeHeader(header) {
+  return (header || '')
+    .replaceAll('\r\n', ' ')
+    .replaceAll('\r', ' ')
+    .replaceAll('\n', ' ')
+    .replaceAll(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+// Lit le fichier Excel, nettoie les lignes vides et retourne les infos nécessaires à l'écriture
+function loadWorksheet(excelPath, sheetName) {
+  const workbook = XLSX.readFile(excelPath);
+  const worksheet = cleanEmptyRows(workbook.Sheets[sheetName]);
+  workbook.Sheets[sheetName] = worksheet;
+  const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+  const headers = extractHeaders(worksheet, range);
+  const lastRow = range.e.r + 1;
+  return { workbook, worksheet, headers, lastRow, range };
+}
+
+// Écrit chaque enregistrement dans la feuille en faisant correspondre les colonnes par nom
+function writeDataRows(worksheet, data, headers, lastRow) {
+  data.forEach((row, i) => {
+    headers.forEach((header, colIndex) => {
+      const value = findValueForHeader(row, normalizeHeader(header));
+      const cellRef = XLSX.utils.encode_cell({ r: lastRow + i, c: colIndex });
+      worksheet[cellRef] = { v: value, t: typeof value === 'number' ? 'n' : 's' };
+    });
+  });
+}
+
+// Cherche dans un enregistrement la valeur dont la clé correspond au header normalisé
+function findValueForHeader(row, normalizedTarget) {
+  for (const [jsonKey, jsonValue] of Object.entries(row)) {
+    if (normalizeHeader(jsonKey) === normalizedTarget) return jsonValue || '';
+  }
+  return '';
+}
+
+// Met à jour la plage de la feuille après ajout de lignes
+function updateSheetRange(worksheet, lastRow, dataLength, lastCol) {
+  worksheet['!ref'] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: lastRow + dataLength - 1, c: lastCol }
+  });
 }
 
 /**
@@ -405,7 +404,7 @@ const dateStr = `${new Date().getFullYear().toString().substring(2)}-${new Date(
 const outputName = path.join(outDir, `result_${dateStr}.json`);
 
 await fs.writeFile(outputName, JSON.stringify(response, null, 2));
-const jsonFileUrl = `file:///${path.resolve(outputName).replace(/\\/g, '/')}`;
+const jsonFileUrl = `file:///${path.resolve(outputName).replaceAll('\\', '/')}`;
 const jsonLink = `\x1B]8;;${jsonFileUrl}\x1B\\${path.basename(outputName)}\x1B]8;;\x1B\\`;
 console.log(`✅ Fichier JSON créé: 🔗 ${jsonLink}`);
 
@@ -422,7 +421,7 @@ for(let error of conversionErrors) {
 
 const errorFileName = `errors_${dateStr}.txt`;
 const errorOutputName = path.join(errorDir, errorFileName);
-const errorFileUrl = `file:///${path.resolve(errorOutputName).replace(/\\/g, '/')}`;
+const errorFileUrl = `file:///${path.resolve(errorOutputName).replaceAll('\\', '/')}`;
 const errorLink = `\x1B]8;;${errorFileUrl}\x1B\\${errorFileName}\x1B]8;;\x1B\\`;
 console.log(`\n==========================================\n\n🚨 Rapport d'erreur : 🔗 ${errorLink}\n\n${errorMessage}\n`);
 await fs.writeFile(errorOutputName, `Rapport d'erreurs :\n\n${errorMessage}`);

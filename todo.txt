@@ -40,6 +40,62 @@ TODO — Projet ROF PDF Parser + Extension Chrome
    - Cas limites : noms avec caractères spéciaux, accents, tirets
 
 
+── TESTS EXTENSION CHROME 🚧 ──────────────────────────────────────────────────
+
+Prérequis : npm run server + npm run sim, onglet localhost:3002 ouvert dans Chrome,
+extension chargée depuis ChromeExtension/.
+
+A. Soumission individuelle — succès
+   [ ] Cliquer "Soumettre" sur un item en mode succès garanti (sim)
+       → item s'estompe (opacity), bordure verte, puis disparaît
+       → le fichier JSON sur le serveur est mis à jour (PATCH ou DELETE)
+       → compteur de personnes restantes décrémenté
+
+B. Soumission individuelle — erreur serveur
+   [ ] Activer "erreurs aléatoires" dans la barre du sim
+   [ ] Cliquer "Soumettre" sur un item qui reçoit une erreur 500
+       → item reste dans la liste, bordure rouge
+       → message "Erreur HTTP 500 — ..." affiché sous le header de l'item
+       → bouton "↺ Réessayer" remplace "Soumettre"
+   [ ] Cliquer "↺ Réessayer" → si succès, item disparaît normalement
+   [ ] Le fichier JSON n'est pas modifié tant que l'item n'est pas traité avec succès
+
+C. Site inaccessible
+   [ ] Fermer l'onglet localhost:3002
+   [ ] Cliquer "Soumettre" sur un item
+       → message "⚠️ Ouvrez d'abord localhost:3002 dans Chrome." dans la barre de statut
+       → bouton "Soumettre" reste actif (non remplacé par retry)
+
+D. "Tout traiter" — succès total
+   [ ] Mode succès garanti, plusieurs items dans la liste
+   [ ] Cliquer "▶ Tout traiter"
+       → bouton "▶ Tout traiter" disparaît, "⏸ Pause" apparaît
+       → items traités séquentiellement, chacun disparaît après succès
+       → à la fin : "⏸ Pause" disparaît, "▶ Tout traiter" réapparaît
+       → fichier JSON supprimé (DELETE) puisque tous traités
+       → message "Aucun fichier à traiter."
+
+E. "Tout traiter" — avec erreurs aléatoires
+   [ ] Mode erreurs aléatoires, plusieurs items
+   [ ] Cliquer "▶ Tout traiter"
+       → les items en succès disparaissent, les items en erreur restent avec bouton retry
+       → les retries manuels fonctionnent normalement après la fin du lot
+
+F. Pause en cours de traitement
+   [ ] Lancer "▶ Tout traiter" avec plusieurs items
+   [ ] Cliquer "⏸ Pause" pendant le traitement
+       → la boucle s'arrête après l'item en cours (pas en plein milieu)
+       → message "⏸ Suspendu — N personne(s) restante(s)"
+       → PATCH envoyé au serveur avec les records non traités
+       → "▶ Tout traiter" réapparaît, "⏸ Pause" disparaît
+   [ ] Vérifier le contenu du fichier JSON : ne contient plus les records déjà traités
+
+G. Actualiser
+   [ ] Traiter quelques items manuellement
+   [ ] Cliquer "⟳ Actualiser"
+       → la liste recharge depuis le serveur (reflète l'état réel du JSON)
+
+
 ── TRAITEMENT DES DONNÉES (rof-signup.js) ✅ ────────────────────────────────────
 
 5. Nettoyage et reformatage des champs via expressions régulières :
@@ -56,6 +112,21 @@ TODO — Projet ROF PDF Parser + Extension Chrome
    - Date de naissance : vérifier et normaliser le format DD/MM/YYYY
    - Email : mise en minuscules, suppression des espaces
    - Ne pas produire de json avec une liste vide.
+
+
+── REFACTORING ✅ ──────────────────────────────────────────────────────────
+
+9. Réduire la complexité cognitive des fonctions trop chargées.
+   - Cibler en priorité les fonctions longues avec plusieurs niveaux d'imbrication
+     (conditions dans des boucles dans des callbacks, etc.).
+   - Appliquer le principe de Single Responsibility : une fonction = une responsabilité.
+   - Découper en sous-fonctions bien nommées plutôt qu'empiler la logique.
+   - Fichiers concernés :
+     [x] rof-signup.js — refactoring + zéro warning SonarQube
+     [x] reset.js      — refactoring + zéro warning SonarQube
+     [x] server.js     — conventions catch + NOSONAR documentés
+     [x] content.js    — refactoring + zéro warning SonarQube
+     [x] popup.js      — refactoring + zéro warning SonarQube
 
 
 ── RAPPORT D'ERREURS (rof-signup.js) 🚧 ────────────────────────────────────
@@ -109,4 +180,7 @@ TODO — Projet ROF PDF Parser + Extension Chrome
      visible dès qu'au moins un item a été traité avec succès.
      Ce bouton envoie un PATCH au serveur avec les records restants,
      permettant de reprendre le traitement plus tard sans reperdre la progression.
+   - À voir : si la soumission item par item synchronise déjà le json, y'a peut-être pas besoin de
+     se prendre la tête pour rien ?
+     Peut-être que pour chaque item créé avec succès ( réponse http 200 ou 201 ) on peut déjà mettre à jour le json ?
    

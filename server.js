@@ -1,6 +1,6 @@
 import express from 'express';
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 const app = express();
 const PORT = 3001;
@@ -23,8 +23,8 @@ app.get('/files', async (req, res) => {
     const files = (await fs.readdir(CONVERTED_DIR))
       .filter(f => f.endsWith('.json'));
     res.json(files);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error_) {
+    res.status(500).json({ error: error_.message });
   }
 });
 
@@ -38,7 +38,7 @@ app.get('/files/:name', async (req, res) => {
   try {
     const content = await fs.readFile(filePath, 'utf-8');
     res.json(JSON.parse(content));
-  } catch (err) {
+  } catch (error_) { // NOSONAR — message générique intentionnel : ne pas fuiter les détails système
     res.status(404).json({ error: 'Fichier introuvable' });
   }
 });
@@ -52,8 +52,8 @@ app.patch('/files/:name', async (req, res) => {
   try {
     await fs.writeFile(filePath, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error_) {
+    res.status(500).json({ error: error_.message });
   }
 });
 
@@ -66,7 +66,7 @@ app.delete('/files/:name', async (req, res) => {
   try {
     await fs.unlink(filePath);
     res.json({ success: true, deleted: req.params.name });
-  } catch (err) {
+  } catch (error_) { // NOSONAR — message générique intentionnel : ne pas fuiter les détails système
     res.status(404).json({ error: 'Fichier introuvable' });
   }
 });

@@ -9,79 +9,77 @@ async function reset() {
   console.log('\n🔄 Réinitialisation du projet...\n');
 
   try {
-    let movedCount = 0;
-    let deletedCount = 0;
+    const movedFromConverted = await movePdfsToRoot(convertedDir);
+    const movedFromErrored = await movePdfsToRoot(erroredDir);
+    await deleteReportFiles(erroredDir);
+    const deletedCount = await deleteOutputFiles(convertedDir);
 
-    // 1. Déplacer les PDFs de ./converted vers la racine
-    console.log('📁 Traitement du dossier ./converted/...');
-    try {
-      const convertedFiles = await fs.readdir(convertedDir);
-      for (const file of convertedFiles) {
-        if (file.endsWith('.pdf')) {
-          const sourceFile = path.join(convertedDir, file);
-          const destFile = path.join(rootDir, file);
-          await fs.rename(sourceFile, destFile);
-          console.log(`  ✅ ${file} déplacé vers la racine`);
-          movedCount++;
-        }
-      }
-    } catch (err) {
-      if (err.code !== 'ENOENT') {
-        console.error(`  ❌ Erreur lors du traitement de ./converted/:`, err.message);
-      }
-    }
-
-    // 2. Déplacer les PDFs de ./errored vers la racine
-    console.log('\n📁 Traitement du dossier ./errored/...');
-    try {
-      const erroredFiles = await fs.readdir(erroredDir);
-      for (const file of erroredFiles) {
-        if (file.endsWith('.pdf')) {
-          const sourceFile = path.join(erroredDir, file);
-          const destFile = path.join(rootDir, file);
-          await fs.rename(sourceFile, destFile);
-          console.log(`  ✅ ${file} déplacé vers la racine`);
-          movedCount++;
-        }
-        if (file.endsWith('.txt')) {
-          console.log(`  🗑️  fichier erreur supprimé : ${file}`);
-          await fs.rm(path.join(erroredDir, file));
-        }
-      }
-    } catch (err) {
-      if (err.code !== 'ENOENT') {
-        console.error(`  ❌ Erreur lors du traitement de ./errored/:`, err.message);
-      }
-    }
-
-    // 3. Supprimer tous les fichiers .json de ./converted
-    console.log('\n🗑️  Suppression des fichiers JSON...');
-    try {
-      const convertedFiles = await fs.readdir(convertedDir);
-      for (const file of convertedFiles) {
-        if (file.endsWith('.json') || file.endsWith('.txt')) {
-          const filePath = path.join(convertedDir, file);
-          await fs.unlink(filePath);
-          console.log(`  ✅ ${file} supprimé`);
-          deletedCount++;
-        }
-      }
-    } catch (err) {
-      if (err.code !== 'ENOENT') {
-        console.error(`  ❌ Erreur lors de la suppression des JSON:`, err.message);
-      }
-    }
-
-    // Résumé
-    console.log('\n✨ Résumé de la réinitialisation:');
-    console.log(`  📦 ${movedCount} fichier(s) PDF déplacé(s) vers la racine`);
-    console.log(`  🗑️  ${deletedCount} fichier(s) JSON supprimé(s)`);
-    console.log('\n✅ Réinitialisation terminée!\n');
-
+    printSummary(movedFromConverted + movedFromErrored, deletedCount);
   } catch (err) {
     console.error('❌ Erreur lors de la réinitialisation:', err);
     process.exit(1);
   }
+}
+
+// Déplace tous les PDFs d'un dossier vers la racine du projet
+async function movePdfsToRoot(sourceDir) {
+  console.log(`\n📁 Traitement du dossier ${sourceDir}/...`);
+  let movedCount = 0;
+  try {
+    const files = await fs.readdir(sourceDir);
+    for (const file of files.filter(f => f.endsWith('.pdf'))) {
+      await fs.rename(path.join(sourceDir, file), path.join(rootDir, file));
+      console.log(`  ✅ ${file} déplacé vers la racine`);
+      movedCount++;
+    }
+  } catch (err) {
+    handleDirError(err, sourceDir);
+  }
+  return movedCount;
+}
+
+// Supprime les fichiers .txt (rapports d'erreurs) d'un dossier
+async function deleteReportFiles(dir) {
+  try {
+    const files = await fs.readdir(dir);
+    for (const file of files.filter(f => f.endsWith('.txt'))) {
+      await fs.rm(path.join(dir, file));
+      console.log(`  🗑️  fichier erreur supprimé : ${file}`);
+    }
+  } catch (err) {
+    handleDirError(err, dir);
+  }
+}
+
+// Supprime les fichiers de sortie (.json, .txt) du dossier converted
+async function deleteOutputFiles(dir) {
+  console.log('\n🗑️  Suppression des fichiers JSON...');
+  let deletedCount = 0;
+  try {
+    const files = await fs.readdir(dir);
+    for (const file of files.filter(f => f.endsWith('.json') || f.endsWith('.txt'))) {
+      await fs.unlink(path.join(dir, file));
+      console.log(`  ✅ ${file} supprimé`);
+      deletedCount++;
+    }
+  } catch (err) {
+    handleDirError(err, dir);
+  }
+  return deletedCount;
+}
+
+// Ignore les erreurs "dossier absent" — les autres sont remontées
+function handleDirError(err, dir) {
+  if (err.code !== 'ENOENT') {
+    console.error(`  ❌ Erreur lors du traitement de ${dir}:`, err.message);
+  }
+}
+
+function printSummary(movedCount, deletedCount) {
+  console.log('\n✨ Résumé de la réinitialisation:');
+  console.log(`  📦 ${movedCount} fichier(s) PDF déplacé(s) vers la racine`);
+  console.log(`  🗑️  ${deletedCount} fichier(s) JSON supprimé(s)`);
+  console.log('\n✅ Réinitialisation terminée!\n');
 }
 
 await reset();

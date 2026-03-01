@@ -1,7 +1,7 @@
 import { PDFDocument } from 'pdf-lib';
 import { faker } from '@faker-js/faker/locale/fr';
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 const TEMPLATE_PATH = './misc/sampleTest_ok.pdf';
 
