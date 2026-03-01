@@ -1,6 +1,6 @@
 {
   "name": "rof-signup",
-  "version": "1.0.0",
+  "version": "1.0.0-rc",
   "type": "module",
   "description": "converts signup pdf to json file",
   "main": "rof-signup.js",

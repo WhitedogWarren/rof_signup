@@ -193,10 +193,20 @@ Objectif : produire un .zip livrable au client, épuré des outils de développe
    - Aucune dépendance supplémentaire — 100% natif Windows.
 
 4. Script de build / packaging
-   - Générer un zip propre : npm run build (ou script dédié).
-   - Le zip est nommé avec la version : rof-parser-v1.0.0.zip (semver).
-   - La version est lue depuis le champ "version" de package.json — un seul endroit
-     à mettre à jour à chaque livraison.
+   - Le package.json du projet est toujours en version x.y.z-rc (release candidate).
+   - À chaque build, le script demande le type de livraison :
+       [1] Mise à jour mineure  (bug fix, UI/UX)    → patch : 1.0.0-rc → 1.0.0
+       [2] Nouvelles fonctionnalités                → minor : 1.0.0-rc → 1.0.0
+       [3] Refonte complète                         → major : 1.0.0-rc → 1.0.0
+     (le -rc est simplement retiré pour la version prod dans les trois cas)
+   - Le zip prod est nommé avec la version nette : rof-parser-v1.0.0.zip
+   - Le package.json du zip ne contient pas le suffixe -rc.
+   - Après le build, le package.json du projet est automatiquement incrémenté
+     selon le type choisi, avec remise du suffixe -rc :
+       patch → 1.0.1-rc
+       minor → 1.1.0-rc
+       major → 2.0.0-rc
+   - Cycle complet : 1.0.0-rc → build → zip 1.0.0 → projet passe à 1.0.1-rc ( si le choix saisi lors du build est "patch" ).
    - Inclure uniquement les fichiers nécessaires à la production (voir point 1).
    - Le zip contiendra un README d'installation indiquant :
        1. npm install --omit=dev
