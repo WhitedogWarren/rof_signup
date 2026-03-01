@@ -239,8 +239,15 @@ function buildErrorReport(data, fileName, errors) {
   const mappedErrors = errors.map(e => `- ${e}`).join('\n');
   let message = `${label}:\n${mappedErrors}`;
 
+  // Un champ invalide (format incorrect) n'est pas un moyen de contact utilisable
+  const invalidFields = new Set(
+    FORMAT_VALIDATIONS
+      .filter(({ field, regex }) => data[field] && !regex.test(String(data[field]).trim()))
+      .map(({ field }) => field)
+  );
+
   const contactLines = contactFields
-    .filter(field => data[field])
+    .filter(field => data[field] && !invalidFields.has(field))
     .map(field => `- ${field} : ${data[field]}`);
 
   if (contactLines.length > 0) {

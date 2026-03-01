@@ -111,6 +111,18 @@ const pdfs = [
     name: 'test4_ok.pdf',
     data: validData(),
   },
+  {
+    name: 'test10_ok.pdf',
+    data: validData(),
+  },
+  {
+    name: 'test11_ok.pdf',
+    data: validData(),
+  },
+  {
+    name: 'test12_ok.pdf',
+    data: validData(),
+  },
 
   // ── 4 formulaires invalides ──
   {
@@ -128,6 +140,10 @@ const pdfs = [
   {
     name: 'test8_manque_ville_naissance.pdf',
     data: { ...validData(), 'Ville de naissance': '' },
+  },
+  {
+    name: 'test9_double_erreur.pdf',
+    data: { ...validData(), 'Nom': '', 'Adresse mail': 'pasunemail' },
   },
 
 ];

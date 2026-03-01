@@ -29,7 +29,9 @@ app.get('/', (req, res) => {
 });
 
 // Route de soumission du formulaire (simule /Affilies/DemandeAffiliation/Init)
-app.post('/Affilies/DemandeAffiliation/Init', (req, res) => {
+// Délai simulé pour permettre de tester la pause et le traitement séquentiel
+app.post('/Affilies/DemandeAffiliation/Init', async (req, res) => {
+  await new Promise(r => setTimeout(r, 1000));
   const body = req.body;
 
   // Validation serveur des champs obligatoires (champs licence exclus)

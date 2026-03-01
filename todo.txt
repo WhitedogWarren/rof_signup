@@ -24,6 +24,12 @@ TODO — Projet ROF PDF Parser + Extension Chrome
      et gérer le cas où le pays n'est pas la France (champ VilleNaissance
      en saisie libre vs. RefCommunesInseeId pour la France).
 
+5. RefCategorieId (Catégorie)
+   - Situation actuelle : non mappé.
+   - Solution : calculer automatiquement en fonction de la date de naissance,
+     de l'année en cours et du sexe — pas de champ à ajouter dans le PDF.
+   - À implémenter dans content.js (côté extension, avant soumission du formulaire).
+
 4. Département de résidence
    - Voir à modifier le PDF. Le champ "Code postal" semble être celui du code postal de naissance.
      Les champs adresse ne contiennent pas d'entrée spécifique pour la ville et le code postal.
@@ -38,62 +44,6 @@ TODO — Projet ROF PDF Parser + Extension Chrome
    - Code postal mal formaté (ex: 4 chiffres, lettres, vide)
    - Emails invalides ou absents
    - Cas limites : noms avec caractères spéciaux, accents, tirets
-
-
-── TESTS EXTENSION CHROME 🚧 ──────────────────────────────────────────────────
-
-Prérequis : npm run server + npm run sim, onglet localhost:3002 ouvert dans Chrome,
-extension chargée depuis ChromeExtension/.
-
-A. Soumission individuelle — succès
-   [ ] Cliquer "Soumettre" sur un item en mode succès garanti (sim)
-       → item s'estompe (opacity), bordure verte, puis disparaît
-       → le fichier JSON sur le serveur est mis à jour (PATCH ou DELETE)
-       → compteur de personnes restantes décrémenté
-
-B. Soumission individuelle — erreur serveur
-   [ ] Activer "erreurs aléatoires" dans la barre du sim
-   [ ] Cliquer "Soumettre" sur un item qui reçoit une erreur 500
-       → item reste dans la liste, bordure rouge
-       → message "Erreur HTTP 500 — ..." affiché sous le header de l'item
-       → bouton "↺ Réessayer" remplace "Soumettre"
-   [ ] Cliquer "↺ Réessayer" → si succès, item disparaît normalement
-   [ ] Le fichier JSON n'est pas modifié tant que l'item n'est pas traité avec succès
-
-C. Site inaccessible
-   [ ] Fermer l'onglet localhost:3002
-   [ ] Cliquer "Soumettre" sur un item
-       → message "⚠️ Ouvrez d'abord localhost:3002 dans Chrome." dans la barre de statut
-       → bouton "Soumettre" reste actif (non remplacé par retry)
-
-D. "Tout traiter" — succès total
-   [ ] Mode succès garanti, plusieurs items dans la liste
-   [ ] Cliquer "▶ Tout traiter"
-       → bouton "▶ Tout traiter" disparaît, "⏸ Pause" apparaît
-       → items traités séquentiellement, chacun disparaît après succès
-       → à la fin : "⏸ Pause" disparaît, "▶ Tout traiter" réapparaît
-       → fichier JSON supprimé (DELETE) puisque tous traités
-       → message "Aucun fichier à traiter."
-
-E. "Tout traiter" — avec erreurs aléatoires
-   [ ] Mode erreurs aléatoires, plusieurs items
-   [ ] Cliquer "▶ Tout traiter"
-       → les items en succès disparaissent, les items en erreur restent avec bouton retry
-       → les retries manuels fonctionnent normalement après la fin du lot
-
-F. Pause en cours de traitement
-   [ ] Lancer "▶ Tout traiter" avec plusieurs items
-   [ ] Cliquer "⏸ Pause" pendant le traitement
-       → la boucle s'arrête après l'item en cours (pas en plein milieu)
-       → message "⏸ Suspendu — N personne(s) restante(s)"
-       → PATCH envoyé au serveur avec les records non traités
-       → "▶ Tout traiter" réapparaît, "⏸ Pause" disparaît
-   [ ] Vérifier le contenu du fichier JSON : ne contient plus les records déjà traités
-
-G. Actualiser
-   [ ] Traiter quelques items manuellement
-   [ ] Cliquer "⟳ Actualiser"
-       → la liste recharge depuis le serveur (reflète l'état réel du JSON)
 
 
 ── TRAITEMENT DES DONNÉES (rof-signup.js) ✅ ────────────────────────────────────
@@ -129,58 +79,166 @@ G. Actualiser
      [x] popup.js      — refactoring + zéro warning SonarQube
 
 
-── RAPPORT D'ERREURS (rof-signup.js) 🚧 ────────────────────────────────────
+── RAPPORT D'ERREURS (rof-signup.js) ✅ ────────────────────────────────────
 
 8. Améliorer la formulation et la pertinence du rapport d'erreurs :
 
-   a) Distinguer "manquant" et "invalide" dans les messages d'erreur.
-      - Actuellement, tous les problèmes sont formulés "X manquant", même quand
-        le champ est présent mais mal formaté.
-      - Exemples attendus :
-          "Code postal naissance invalide (format attendu : 5 chiffres, ex: 80000)"
-          "Adresse mail invalide"
-          "Nom manquant"
-      - Cela implique de distinguer les erreurs de type "absent" des erreurs de type
-        "présent mais incorrect" dans checkData(), et d'adapter le message en conséquence.
+   [x] a) Distinguer "manquant" et "invalide" dans les messages d'erreur.
+          listMissingFields → "X manquant", listInvalidFormats → messages de format dédiés.
 
-   b) Ne pas inclure l'adresse mail dans les "moyens de contact" si elle est invalide.
-      - Actuellement, si l'email est présent mais malformé, il apparaît quand même
-        dans la section "Moyens de contact" du rapport.
-      - Or un email invalide n'est pas un moyen de contact utilisable — autant contacter
-        quelqu'un par pigeon voyageur.
-      - Correction : n'ajouter l'email aux contacts que s'il passe la validation de format.
+   [x] b) Ne pas inclure un moyen de contact invalide dans le rapport.
+          buildErrorReport exclut désormais tout champ dont le format est incorrect
+          (email malformé, etc.) — étendu à tous les moyens de contact, pas seulement l'email.
 
 
-── EXTENSION CHROME 🚧 ───────────────────────────────────────────────────────
+── EXTENSION CHROME ✅ ───────────────────────────────────────────────────────
 
-6. Soumission automatique du formulaire depuis l'extension :
-   - Proposer un bouton pour traiter tout le lot.
-     les items seront alors traités un par un. L'extension remplit et soumet le formulaire,
-     puis attends le resultat du call API. Si le code correspond à un succès, l'item est enlevé
-     de la liste, et on passe au suivant.
-     Si le code correspond à un echec, l'item est toujours present dans la liste. On y affiche alors
-     un bouton pour retenter la soumission.
-   - Proposer également pour chaque item un bouton permettant de traiter individuellement l'item.
-   - Proposer un bouton pour suspendre le traitement.
-     Il faut alors pouvoir renvoyer à l'application node l'ensemble des items
-     qui n'ont pas été traités pour mettre à jour le fichier json plutôt que le supprimer.
+[x] 6. Soumission automatique — bouton "Soumettre" par item + bouton "▶ Tout traiter"
+[x] 7. Gestion des réponses : succès → item supprimé + PATCH/DELETE JSON,
+        erreur HTTP → bouton "↺ Réessayer", erreur réseau → message d'avertissement
+[x] 8. Synchronisation JSON : PATCH au serveur après chaque succès individuel
+        et après une pause — le fichier reflète toujours les records restants
 
-7. Gestion de la réponse du site après soumission :
-   - Succès (HTTP 201) : marquer l'item comme traité automatiquement,
-     afficher une confirmation dans le popup.
-   - Erreur serveur (HTTP 401, 403, 500) : afficher le message d'erreur,
-     proposer de réessayer.
-   - Erreur réseau : signaler que le site est inaccessible.
+── TESTS EXTENSION CHROME ✅ ──────────────────────────────────────────────────
 
-8. Synchronisation du fichier JSON lors du traitement item par item :
-   - Problème : quand l'utilisateur traite les items manuellement (un par un),
-     les items supprimés de l'UI ne sont pas retirés du fichier JSON sur le serveur.
-     Le fichier reste intact jusqu'à ce que tous les items soient traités (DELETE).
-   - Solution : ajouter un bouton "Sauvegarder et quitter" (ou équivalent) dans le header,
-     visible dès qu'au moins un item a été traité avec succès.
-     Ce bouton envoie un PATCH au serveur avec les records restants,
-     permettant de reprendre le traitement plus tard sans reperdre la progression.
-   - À voir : si la soumission item par item synchronise déjà le json, y'a peut-être pas besoin de
-     se prendre la tête pour rien ?
-     Peut-être que pour chaque item créé avec succès ( réponse http 200 ou 201 ) on peut déjà mettre à jour le json ?
-   
+Prérequis : npm run server + npm run sim, onglet localhost:3002 ouvert dans Chrome,
+extension chargée depuis ChromeExtension/.
+
+A. Soumission individuelle — succès
+   [x] Cliquer "Soumettre" sur un item en mode succès garanti (sim)
+       → item s'estompe (opacity), bordure verte, puis disparaît
+       → le fichier JSON sur le serveur est mis à jour (PATCH ou DELETE)
+       → compteur de personnes restantes décrémenté
+
+B. Soumission individuelle — erreur serveur
+   [x] Activer "erreurs aléatoires" dans la barre du sim
+   [x] Cliquer "Soumettre" sur un item qui reçoit une erreur 500
+       → item reste dans la liste, bordure rouge
+       → message "Erreur HTTP 500 — ..." affiché sous le header de l'item
+       → bouton "↺ Réessayer" remplace "Soumettre"
+   [x] Cliquer "↺ Réessayer" → si succès, item disparaît normalement
+   [x] Le fichier JSON n'est pas modifié tant que l'item n'est pas traité avec succès
+
+C. Site inaccessible
+   [x] Fermer l'onglet localhost:3002
+   [x] Cliquer "Soumettre" sur un item
+       → message "⚠️ Ouvrez d'abord localhost:3002 dans Chrome." dans la barre de statut
+       → bouton "Soumettre" reste actif (non remplacé par retry)
+
+D. "Tout traiter" — succès total
+   [x] Mode succès garanti, plusieurs items dans la liste
+   [x] Cliquer "▶ Tout traiter"
+       → bouton "▶ Tout traiter" disparaît, "⏸ Pause" apparaît
+       → items traités séquentiellement, chacun disparaît après succès
+       → à la fin : "⏸ Pause" disparaît, "▶ Tout traiter" réapparaît
+       → fichier JSON supprimé (DELETE) puisque tous traités
+       → message "Aucun fichier à traiter."
+
+E. "Tout traiter" — avec erreurs aléatoires
+   [x] Mode erreurs aléatoires, plusieurs items
+   [x] Cliquer "▶ Tout traiter"
+       → les items en succès disparaissent, les items en erreur restent avec bouton retry
+       → les retries manuels fonctionnent normalement après la fin du lot
+
+F. Pause en cours de traitement
+   [x] Lancer "▶ Tout traiter" avec plusieurs items
+   [x] Cliquer "⏸ Pause" pendant le traitement
+       → la boucle s'arrête après l'item en cours (pas en plein milieu)
+       → message "⏸ Suspendu — N personne(s) restante(s)"
+       → PATCH envoyé au serveur avec les records non traités
+       → "▶ Tout traiter" réapparaît, "⏸ Pause" disparaît
+   [x] Vérifier le contenu du fichier JSON : ne contient plus les records déjà traités
+
+G. Actualiser
+   [x] Traiter quelques items manuellement
+   [x] Cliquer "⟳ Actualiser"
+       → la liste recharge depuis le serveur (reflète l'état réel du JSON)
+
+
+── VERSION PRODUCTION 🚧 ──────────────────────────────────────────────────────
+
+Objectif : produire un .zip livrable au client, épuré des outils de développement.
+
+1. Périmètre du build de production
+   - Exclure du zip :
+     - SimServer/ (serveur de simulation)
+     - generate-test-pdfs.js (génération de PDFs de test)
+     - reset.js (script de réinitialisation dev)
+     - les PDFs de test (test*.pdf)
+     - node_modules/, .git/, fichiers de config dev (*.code-workspace, etc.)
+   - Inclure :
+     - server.js + package.json (dépendances prod uniquement)
+     - ChromeExtension/ (popup, content, manifest…)
+     - rof-signup.js
+     - Le fichier de configuration des chemins (voir point 2)
+
+2. Fichier de configuration des chemins (paths.config.json)
+   - Créer un fichier paths.config.json à la racine, référencé par server.js et rof-signup.js.
+   - Contenu minimal :
+     {
+       "watchDir": "C:/chemin/vers/dossier/pdfs",
+       "convertedDir": "<watchDir>/converted",
+       "erroredDir":   "<watchDir>/errored"
+     }
+   - converted/ et errored/ sont des sous-répertoires du dossier surveillé.
+   - Les scripts lisent ce fichier au démarrage au lieu d'utiliser des chemins codés en dur.
+
+3. Script d'initialisation (setup.bat + setup.js) — Windows uniquement
+   - setup.bat ouvre la boîte de dialogue système native via PowerShell
+     (System.Windows.Forms.FolderBrowserDialog) :
+       * accès à l'arborescence complète du système
+       * bouton "Créer un nouveau dossier" inclus nativement
+   - Le chemin sélectionné est passé en argument à node setup.js.
+   - setup.js écrit paths.config.json et crée converted/ et errored/ si absents.
+   - Aucune dépendance supplémentaire — 100% natif Windows.
+
+4. Script de build / packaging
+   - Générer un zip propre : npm run build (ou script dédié).
+   - Le zip est nommé avec la version : rof-parser-v1.0.0.zip (semver).
+   - La version est lue depuis le champ "version" de package.json — un seul endroit
+     à mettre à jour à chaque livraison.
+   - Inclure uniquement les fichiers nécessaires à la production (voir point 1).
+   - Le zip contiendra un README d'installation indiquant :
+       1. npm install --omit=dev
+       2. setup.bat       (sélection du dossier, première installation uniquement)
+       3. npm start       (lance le serveur)
+       4. Charger ChromeExtension/ dans Chrome (mode développeur)
+
+
+── GESTION DES DOUBLONS EXCEL 🚧 ─────────────────────────────────────────────
+
+Actuellement rof-signup.js ajoute toujours une nouvelle ligne dans le fichier Excel,
+sans vérifier si le licencié existe déjà.
+
+1. Clé d'unicité : Nom + Prénom + Date de naissance
+   - Avant d'écrire une ligne, chercher une ligne existante avec les mêmes trois valeurs.
+   - Si trouvée → mettre à jour les champs de la ligne existante (upsert).
+   - Si non trouvée → ajouter une nouvelle ligne (comportement actuel).
+
+2. Points d'attention
+   - La comparaison doit être insensible à la casse et aux espaces superflus
+     (les noms sont normalisés en majuscules, mais mieux vaut défensif que désolé).
+   - Logger clairement : "Mise à jour de X Y (existant)" vs "Ajout de X Y (nouveau)".
+
+
+── MIGRATION VERS BASE DE DONNÉES (vision long terme) 🚧 ─────────────────────
+
+Remplacement du fichier Excel par une base de données SQLite.
+Contexte : petit club, usage mono-poste, pic de charge en période d'inscriptions uniquement.
+SQLite est amplement suffisant — fichier local, zéro serveur, zéro configuration réseau.
+
+1. Choix de la base : SQLite
+   - Un seul fichier .db → sauvegarde = copier-coller du fichier.
+   - Prévoir une routine de sauvegarde automatique (copie horodatée du .db,
+     ex: via une tâche planifiée Windows ou un bouton "Sauvegarder" dans le CRUD).
+
+2. Interface CRUD
+   - Application web locale (servie par server.js ou un serveur dédié).
+   - Présentation soignée : liste des licenciés, recherche, tri, pagination.
+   - Opérations : consulter, modifier, supprimer une entrée.
+   - L'ajout reste géré par le flux PDF → JSON → extension Chrome (pas de saisie manuelle).
+
+3. Import des données existantes
+   - Script d'import one-shot : lire le fichier Excel existant du client
+     et insérer toutes les lignes en base (avec gestion des doublons, voir section ci-dessus).
+   - À proposer au client lors du passage en production base de données.

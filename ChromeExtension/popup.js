@@ -132,7 +132,8 @@ async function submitItem(fileName, record, index, itemEl) {
       btnSubmit.disabled = false;
       btnSubmit.textContent = 'Soumettre';
     }
-    return false;
+    // null = erreur fatale (site absent) → la boucle "Tout traiter" doit s'arrêter
+    return null;
   }
 
   try {
@@ -220,7 +221,7 @@ btnProcessAll.addEventListener('click', async () => {
   isProcessing   = true;
   pauseRequested = false;
   btnProcessAll.style.display = 'none';
-  btnPause.style.display      = '';
+  btnPause.style.display      = 'block';
   btnPause.disabled           = false;
   btnRefresh.disabled         = true;
 
@@ -232,7 +233,10 @@ btnProcessAll.addEventListener('click', async () => {
     const { fileName, index } = itemEl.dataset;
     const record = JSON.parse(itemEl.dataset.record);
 
-    await submitItem(fileName, record, Number(index), itemEl);
+    const result = await submitItem(fileName, record, Number(index), itemEl);
+
+    // null = site non ouvert — inutile de continuer sur les items suivants
+    if (result === null) break;
 
     if (!pauseRequested) {
       await new Promise(r => setTimeout(r, 600));
